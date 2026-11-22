@@ -2,6 +2,8 @@ import dotenv from 'dotenv'
 import {Bot} from 'grammy'
 import {gameOptions, againOptions} from "./options.js";
 
+import db from './db.js'
+
 dotenv.config()
 
 const token = process.env.token
@@ -29,10 +31,10 @@ const start = async () => {
     bot.on('message:text', async (ctx) => {
 
         const text = ctx.message.text
-        const chadId = ctx.chat.id
 
         if (text === '/start') {
             await ctx.replyWithSticker('CAACAgIAAxkBAAMUawLbBL-Z7e2X02UM1ccmTicfpxIAAto1AAJ5sAFKpLb5HvzLl_E9BA')
+
             return ctx.reply('бот запущен')
         }
 
@@ -42,6 +44,10 @@ const start = async () => {
 
         if (text === '/game') {
             return generateRandomNumber(ctx)
+        }
+
+        if (text === '/help') {
+            return ctx.reply("в разработке")
         }
 
         return ctx.reply("команда не распознана")
@@ -64,12 +70,29 @@ const start = async () => {
             return generateRandomNumber(ctx)
         }
 
-        await ctx.reply("вы нажали на кнопку")
-
         if (Number(data) === chats[chatId]) {
             delete chats[chatId]
+
+            const res = await db.query(
+                `insert into information (chat_id, name, right_count, wrong_count)
+                 values ($1, $2, 1, 0) on conflict (chat_id) do
+                update set
+                    right_count = information.right_count + 1,
+                    name = excluded.name returning *`, [chatId, ctx.from.first_name]
+            )
+
+            const userStats = res.rows[0]
             return ctx.reply(`ты угадал, ${data}`, againOptions)
         } else {
+
+            const res = await db.query(
+                `insert into information (chat_id, name, right_count, wrong_count)
+                 values ($1, $2, 0, 1) on conflict (chat_id) do
+                update set
+                    wrong_count = information.wrong_count + 1,
+                    name = excluded.name returning *`, [chatId, ctx.from.first_name]
+            )
+
             return ctx.reply(`не угадал, ${chats[chatId]}`, againOptions)
         }
 
